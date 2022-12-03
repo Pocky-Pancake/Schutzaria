@@ -1,5 +1,5 @@
 import sqlite3, nextcord, dotenv, os
-from nextcord import Intents, Interaction, Role, SlashOption
+from nextcord import Intents, Interaction, Role, SlashOption, Embed
 from nextcord.ext import commands, application_checks
 from dotenv import load_dotenv
 from typing import Optional
@@ -47,6 +47,13 @@ async def on_ready():
     )
     """
     )
+    c.execute("""CREATE TABLE IF NOT EXISTS objectdata (
+        guild_id integer,
+        name text,
+        value
+    )
+    """
+    )
 
 @bot.event
 async def on_application_command_error(interaction:Interaction, error):
@@ -58,8 +65,8 @@ async def on_application_command_error(interaction:Interaction, error):
     else:
         raise error
 
-help_content = ("Receive help.", "Allows receiving and losing roles.", "The role you want to receive or lose.", "Display a list of all roles enabled on this server.", "Display a list of the roles you currently have.", "Create a new role selector.", "Remove an existing role selector.", "Add a role into the dropdown.", "Remove a role from the dropdown.", "The emoji shown in the dropdown.", "The description shown in the dropdown.", "The role you want to add.", "The role you want to remove.", "The name of the dropdown.", "Display a list of the objects created on this server.", "The page to display.", "Choose a category of commands.")
-#                     0                           1                                      2                                           3                                                    4                                           5                                 6                                    7                                8                                 9                                         10                                    11                             12                          13                                          14                                      15                            16        
+help_content = ("Receive help.", "Allows receiving and losing roles.", "The role you want to receive or lose.", "Display a list of all roles enabled on this server.", "Display a list of the roles you currently have.", "Create a new role selector.", "Remove an existing role selector.", "Add a role into the dropdown.", "Remove a role from the dropdown.", "The emoji shown in the dropdown.", "The description shown in the dropdown.", "The role you want to add.", "The role you want to remove.", "The name of the dropdown.", "Display a list of the objects created on this server.", "The page to display.", "Choose a category of commands.", "Pong! Check bot's latency.")
+#                     0                           1                                      2                                           3                                                    4                                           5                                 6                                    7                                8                                 9                                         10                                    11                             12                          13                                          14                                      15                            16                              17
 
 @bot.slash_command()
 async def settings(interaction:Interaction):
@@ -70,8 +77,10 @@ async def settings(interaction:Interaction):
 @application_checks.has_permissions(manage_roles=True)
 async def dropdown_add(interaction:Interaction, dropdown_name:str = SlashOption(description=help_content[13])):
     """Create dropdown table"""
-    if " " in dropdown_name or "." in dropdown_name:
-        await interaction.response.send_message("Cannot create dropdown, name contains space(s) or period(s).")
+    if " " in dropdown_name or "." in dropdown_name or not dropdown_name.isalpha():
+        await interaction.response.send_message("Cannot create dropdown, name contains space(s), period(s) or number(s).")
+    elif "DROPDOWN" in dropdown_name:
+        await interaction.response.send_message("Cannot create dropdown, name cannot be of the following:\n`DROPDOWN`")
     else:
         if c.execute(f"SELECT name FROM sqlite_master where name = 'DROPDOWN.{dropdown_name}.{interaction.guild.id}' and type = 'table'").fetchone() != None:
             await interaction.response.send_message(f"Role selector \"{dropdown_name}\" already exist.")
@@ -95,11 +104,6 @@ async def dropdown_remove(interaction:Interaction, dropdown_name:str = SlashOpti
     except:
         await interaction.response.send_message(f"Role selector \"{dropdown_name}\" does not exist.")
 
-@settings.subcommand(description=help_content[14])
-async def db_list(interaction:Interaction, page:Optional[int] = SlashOption(description=help_content[15])):
-    """database list"""
-    await get_page_dblist(interaction, page)
-
 @settings.subcommand(description=help_content[7])
 @application_checks.has_permissions(manage_roles=True)
 async def role_add(interaction:Interaction, dropdown_name:str = SlashOption(description=help_content[13]), role:Role = SlashOption(description=help_content[11]), emoji:Optional[str] = SlashOption(description=f"{help_content[9]} (Optional)"), desc:Optional[str] = SlashOption(description=f"{help_content[10]} (Optional)")):
@@ -109,6 +113,16 @@ async def role_add(interaction:Interaction, dropdown_name:str = SlashOption(desc
 @application_checks.has_permissions(manage_roles=True)
 async def role_remove(interaction:Interaction, dropdown_name:str = SlashOption(description=help_content[13]), role:Role = SlashOption(description=help_content[12])):
     """Remove from the dropdown"""
+
+@bot.slash_command(name="list")
+async def lists(interaction:Interaction):
+    """List group"""
+    pass
+
+@lists.subcommand(name="object", description=help_content[14])
+async def objlist(interaction:Interaction, page:Optional[int] = SlashOption(description=help_content[15])):
+    """database list"""
+    await get_obj_list(interaction, page, edit=0)
 
 @bot.slash_command(description=help_content[1])
 async def roles(interaction:Interaction, role:Optional[Role] = SlashOption(description=f"{help_content[2]} (Optional)")):
@@ -120,48 +134,13 @@ async def roles(interaction:Interaction, role:Optional[Role] = SlashOption(descr
         await interaction.response.send_message("This feature isn't added.")
 
 @bot.slash_command(description=help_content[0])
-async def help(interaction:Interaction, category:Optional[str] = SlashOption(description=help_content[16], choices={"acommands":"acommands","bcommands":"bcommands"})):
+async def help(interaction:Interaction, category:Optional[int] = SlashOption(description=help_content[16], choices={"Main Commands":0,"Settings Commands":1,"List Commands":2})):
     """Help embed"""
-    acommands = f"""
-    </roles:1047746068147875880>
-    {help_content[1]}
+    await get_help(interaction, category, help_content, edit=0)
 
-    > `role` (Optional)
-    > {help_content[2]}
-
-    </help:1047746069347438592>
-    {help_content[0]}
-    """
-    bcommands = f"""
-    </settings dropdown_add:1048307053728370749>
-    {help_content[5]}
-
-    > `dropdown_name`
-    > {help_content[13]}
-
-    </settings dropdown_remove:1048307053728370749>
-    {help_content[6]}
-
-    > `dropdown_name`
-    > {help_content[13]}
-
-    </settings db_list:1048307053728370749>
-    {help_content[14]}
-
-    > `page`
-    > {help_content[15]}
-    """
-
-    if category == "acommands":
-        set_title = "Help - Main Commands:"
-        set_desc = "This is the list of main commands."
-        set_commands_1 = acommands
-        set_commands_2 = " "
-
-    embed = nextcord.Embed(title=set_title, description=set_desc, color=0xf1c40f)
-    embed.add_field(name=" ", value=set_commands_1, inline=True)
-    embed.add_field(name=" ", value=set_commands_2, inline=True)
-
+@bot.slash_command(description=help_content[17])
+async def ping(interaction:Interaction):
+    embed = Embed(title="Pong!", description=f"💓⏲️ {bot.latency}", color=0xf1c40f)
     await interaction.response.send_message(embed=embed)
 
 @bot.slash_command()
