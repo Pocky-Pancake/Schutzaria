@@ -4,6 +4,7 @@ from nextcord.ext import commands, application_checks
 from dotenv import load_dotenv
 from typing import Optional
 from utils import *
+from permission_decalculator import DecalcPerms
 
 load_dotenv()
 print("Please input bot number: ")
@@ -31,7 +32,6 @@ while not valid:
 activity = nextcord.Game("main.py")
 
 intents = Intents.all()
-intents.message_content = True
 bot = commands.Bot(activity=activity,intents=intents)
 
 conn = sqlite3.connect("bot.db")
@@ -65,8 +65,30 @@ async def on_application_command_error(interaction:Interaction, error):
     else:
         raise error
 
-help_content = ("Receive help.", "Allows receiving and losing roles.", "The role you want to receive or lose.", "Display a list of all roles enabled on this server.", "Display a list of the roles you currently have.", "Create a new role selector.", "Remove an existing role selector.", "Add a role into the dropdown.", "Remove a role from the dropdown.", "The emoji shown in the dropdown.", "The description shown in the dropdown.", "The role you want to add.", "The role you want to remove.", "The name of the dropdown.", "Display a list of the objects created on this server.", "The page to display.", "Choose a category of commands.", "Pong! Check bot's latency.")
-#                     0                           1                                      2                                           3                                                    4                                           5                                 6                                    7                                8                                 9                                         10                                    11                             12                          13                                          14                                      15                            16                              17
+help_content = (
+    "Receive help.", # 0 
+    "Allows receiving and losing roles.", # 1
+    "The role you want to receive or lose.", # 2
+    "Display a list of all roles enabled on this server.", # 3
+    "Display a list of the roles you currently have.", # 4
+    "Create a new role selector.", # 5
+    "Remove an existing role selector.", # 6
+    "Add a role into the dropdown.", # 7
+    "Remove a role from the dropdown.", # 8
+    "The emoji shown in the dropdown.", # 9
+    "The description shown in the dropdown.", # 10
+    "The role you want to add.", # 11
+    "The role you want to remove.", # 12
+    "The name of the dropdown.", # 13
+    "Display a list of the objects created on this server.", # 14
+    "The page to display.", # 15
+    "Choose a category of commands.", # 16
+    "Pong! Check bot's latency.", # 17
+    "Fetch a detailled profile.", # 18
+    "User to fetch from.", # 19
+    "Add content to object.", # 20
+    "The name of the object." # 21
+)
 
 @bot.slash_command()
 async def settings(interaction:Interaction):
@@ -114,15 +136,19 @@ async def role_add(interaction:Interaction, dropdown_name:str = SlashOption(desc
 async def role_remove(interaction:Interaction, dropdown_name:str = SlashOption(description=help_content[13]), role:Role = SlashOption(description=help_content[12])):
     """Remove from the dropdown"""
 
-@bot.slash_command(name="list")
-async def lists(interaction:Interaction):
+@bot.slash_command()
+async def objects(interaction:Interaction):
     """List group"""
     pass
 
-@lists.subcommand(name="object", description=help_content[14])
+@objects.subcommand(name="list", description=help_content[14])
 async def objlist(interaction:Interaction, page:Optional[int] = SlashOption(description=help_content[15])):
     """database list"""
     await get_obj_list(interaction, page, edit=0)
+
+@objects.subcommand(description=help_content[20])
+async def add_content(interaction:Interaction, object_name:str = SlashOption(description=help_content[21])):
+    await interaction.response.send_modal(ObjectModal("DROPDOWN"))
 
 @bot.slash_command(description=help_content[1])
 async def roles(interaction:Interaction, role:Optional[Role] = SlashOption(description=f"{help_content[2]} (Optional)")):
@@ -141,6 +167,81 @@ async def help(interaction:Interaction, category:Optional[int] = SlashOption(des
 @bot.slash_command(description=help_content[17])
 async def ping(interaction:Interaction):
     embed = Embed(title="Pong!", description=f"💓⏲️ {bot.latency}", color=0xf1c40f)
+    await interaction.response.send_message(embed=embed)
+
+@bot.slash_command(name="profile", description=help_content[18])
+async def fetch_profile(interaction:Interaction, member:Optional[nextcord.Member] = SlashOption(description=help_content[19])):
+    if not member:
+        try_status = interaction.user.status # fixes weird bug
+        guild = bot.get_guild(interaction.guild.id)
+        member = await guild.fetch_member(interaction.user.id)
+        user = await bot.fetch_user(interaction.user.id)
+    else:
+        user = await bot.fetch_user(member.id)
+    def get_status_emoji(method):
+        if method == "dnd":
+            return "<:dnd:1051224321621757972>"
+        elif method == "online":
+            return "<:online:1051224319545577502>"
+        elif method == "idle":
+            return "<:idle:1051224316919943179>"
+        elif method == "offline":
+            return "<:offline:1051224324385820776>"
+        else:
+            return 0xff
+    set_timeout = ""
+    if member.nick:
+        set_title = member.nick
+        try:
+            set_desc = get_status_emoji(try_status) + f" {try_status.replace('dnd','do not disturb').capitalize()}"
+        except:
+            set_desc = get_status_emoji(member.status) + f" {member.status.replace('dnd','do not disturb').capitalize()}"
+        if member.communication_disabled_until != None:
+            set_timeout = f"\nCurrently timed-out on this server until:\n{member.communication_disabled_until}"
+    else:
+        set_title = member.name
+        try:
+            set_desc = get_status_emoji(try_status) + f" {try_status.replace('dnd','do not disturb').capitalize()}"
+        except:
+            set_desc = get_status_emoji(member.status) + f" {member.status.replace('dnd','do not disturb').capitalize()}"
+        if member.communication_disabled_until != None:
+            set_timeout = f"\nCurrently timed-out on this server until:\n{member.communication_disabled_until}"
+    embed = Embed(title=set_title, description=f"{set_desc}{set_timeout}", color=member.colour)
+    if member.guild_avatar:
+        embed.set_thumbnail(member.guild_avatar.url)
+    else:
+        embed.set_thumbnail(member.display_avatar.url)
+    if member.banner:
+        embed.set_image(member.banner.url)
+    elif user.banner:
+        embed.set_image(user.banner.url)
+    if member.nick:
+        embed.add_field(name="Identity", value=f"{member}\n{member.nick}\n{member.id}", inline=False)
+    else:
+        embed.add_field(name="Identity", value=f"{member}\n{member.id}", inline=False)
+    role_field = ""
+    for x in member.roles:
+        if x.mention != "@everyone":
+            role_field += f"{x.mention} "
+    if role_field == "":
+        role_field = "This user doesn't have any roles."
+    if len(member.roles) == 2 or len(member.roles) == 1:
+        embed.add_field(name="Role", value=role_field, inline=False)
+    else:
+        embed.add_field(name="Roles", value=role_field, inline=False)
+    member_perms = DecalcPerms(member.guild_permissions.value)
+    set_perms = ""
+    for x in member_perms:
+        set_perms += f"`{x}` "
+    if set_perms == "":
+        set_perms = "This user has no permissions."
+    if len(member_perms) == 1 or len(member_perms) == 0:
+        embed.add_field(name="Permission", value=set_perms, inline=False)
+    else:
+        embed.add_field(name="Permissions", value=set_perms, inline=False)
+    embed.add_field(name="Join Date", value=f"Server: {member.joined_at}\nDiscord: {user.created_at}", inline=False)
+    embed.set_footer(icon_url=interaction.guild.icon, text=interaction.guild)
+
     await interaction.response.send_message(embed=embed)
 
 @bot.slash_command()

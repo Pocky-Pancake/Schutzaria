@@ -1,6 +1,6 @@
 import sqlite3, nextcord
 from nextcord import Interaction, SelectOption, ButtonStyle, Embed
-from nextcord.ui import View, Select, Button
+from nextcord.ui import View, Select, Button, TextInput, Modal
 from math import ceil
 
 conn = sqlite3.connect("bot.db")
@@ -165,3 +165,26 @@ class RoleMenuView(View):
     def __init__(self, interaction):
         super().__init__(timeout=600)
         self.add_item(RoleMenu(interaction))
+
+class ObjectModal(Modal):
+    def __init__(self, object_type):
+        ModalTitle = "Test"
+        super().__init__(
+            ModalTitle,
+        )
+
+        self.object_type = object_type
+
+        self.selectname = TextInput(label="Role Name", min_length=1, required=True, placeholder="test", style=nextcord.TextInputStyle.short,)
+        self.add_item(self.selectname)
+        self.roleid = TextInput(label="Role ID", min_length=1, required=True, placeholder="test", style=nextcord.TextInputStyle.paragraph,)
+        self.add_item(self.roleid)
+
+    async def callback(self, interaction:Interaction) -> None:
+        object_type = self.object_type
+        
+        selectname = self.selectname.value
+        roleid = self.roleid.value
+
+        await interaction.response.send_message("Test")
+        return 0
