@@ -1,5 +1,5 @@
-# Schutzaria
-A role discord bot
+#Schutzaria
 
+(abandoned repository)
 
-This is unfinished please don't use it.
+Discord bot
